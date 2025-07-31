@@ -13,6 +13,10 @@ package fortunes
 // - When quoting someone, the text should start with a "-- " prefixed with a
 //   tab character.
 var bitcoinFortunes = []string{
+	`Stay humble and stack sats.
+
+	-- ODELL`,
+
 	`It's very attractive to the libertarian viewpoint if we can explain it properly. I'm better with code than with words though.
 
 	-- Satoshi Nakamoto, 2008`,

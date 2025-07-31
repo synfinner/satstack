@@ -13,25 +13,14 @@ import (
 )
 
 func (s *Service) GetHealth() error {
-	// Custom blockchain info struct to avoid btcd struct incompatibility
-	type customBlockChainInfo struct {
-		Warnings []string `json:"warnings"`
-	}
-
-	client, err := s.Bus.ClientFactory()
-	if err != nil {
-		return err
-	}
-	defer client.Shutdown()
-
-	result, err := client.RawRequest("getblockchaininfo", nil)
+	info, err := s.Bus.GetBlockChainInfo()
 	if err != nil {
 		return err
 	}
 
-	var info customBlockChainInfo
-	if err := json.Unmarshal(result, &info); err != nil {
-		return fmt.Errorf("unable to parse blockchain info: %w", err)
+	// A nil blockchainInfo indicates that the node is not yet ready.
+	if info == nil {
+		return nil
 	}
 
 	// TODO: Check contents of GetBlockChainInfo response

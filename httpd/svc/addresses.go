@@ -21,6 +21,12 @@ func (s *Service) GetAddresses(addresses []string, blockHash *string, blockHeigh
 		return types.Addresses{}, err
 	}
 
+	// A nil blockchainInfo indicates that the node is not yet ready.
+	if blockchainInfo == nil {
+		return types.Addresses{}, nil
+	}
+
+
 	txResults, err := s.Bus.ListTransactions(blockHash)
 	if err != nil {
 		log.WithFields(log.Fields{

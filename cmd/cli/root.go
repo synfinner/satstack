@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/ledgerhq/satstack/bus"
 	"github.com/ledgerhq/satstack/config"
 	"github.com/ledgerhq/satstack/fortunes"
@@ -124,6 +125,7 @@ func Execute() {
 }
 
 func startup(unloadWallet bool, circulationCheck bool, forceImportDesc bool) *svc.Service {
+	gin.SetMode(gin.ReleaseMode)
 
 	if version.Build == "development" {
 		log.SetLevel(log.DebugLevel)
