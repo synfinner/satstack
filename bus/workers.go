@@ -1,6 +1,7 @@
 package bus
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -17,10 +18,24 @@ import (
 )
 
 func waitForIBD(b *Bus) error {
+	// Custom blockchain info struct to avoid btcd struct incompatibility
+	type customBlockChainInfo struct {
+		Blocks               int32   `json:"blocks"`
+		Headers              int32   `json:"headers"`
+		BestBlockHash        string  `json:"bestblockhash"`
+		VerificationProgress float64 `json:"verificationprogress"`
+		Warnings             []string `json:"warnings"`
+	}
+
 	for {
-		info, err := b.mainClient.GetBlockChainInfo()
+		result, err := b.mainClient.RawRequest("getblockchaininfo", nil)
 		if err != nil {
 			return err
+		}
+
+		var info customBlockChainInfo
+		if err := json.Unmarshal(result, &info); err != nil {
+			return fmt.Errorf("unable to parse blockchain info: %w", err)
 		}
 
 		if info.Blocks != info.Headers {

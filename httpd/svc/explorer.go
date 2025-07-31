@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -12,9 +13,25 @@ import (
 )
 
 func (s *Service) GetHealth() error {
-	_, err := s.Bus.GetBlockChainInfo()
+	// Custom blockchain info struct to avoid btcd struct incompatibility
+	type customBlockChainInfo struct {
+		Warnings []string `json:"warnings"`
+	}
+
+	client, err := s.Bus.ClientFactory()
 	if err != nil {
 		return err
+	}
+	defer client.Shutdown()
+
+	result, err := client.RawRequest("getblockchaininfo", nil)
+	if err != nil {
+		return err
+	}
+
+	var info customBlockChainInfo
+	if err := json.Unmarshal(result, &info); err != nil {
+		return fmt.Errorf("unable to parse blockchain info: %w", err)
 	}
 
 	// TODO: Check contents of GetBlockChainInfo response
@@ -63,10 +80,28 @@ func (s *Service) GetStatus() *bus.ExplorerStatus {
 	defer client.Shutdown()
 
 	// Case 3: bitcoind is unreachable - chain RPC failed.
-	blockChainInfo, err := client.GetBlockChainInfo()
+	// Custom blockchain info struct to avoid btcd struct incompatibility
+	type customBlockChainInfo struct {
+		Blocks               int32   `json:"blocks"`
+		Headers              int32   `json:"headers"`
+		VerificationProgress float64 `json:"verificationprogress"`
+		Warnings             []string `json:"warnings"`
+	}
+
+	result, err := client.RawRequest("getblockchaininfo", nil)
 	if err != nil {
 		log.WithField(
 			"err", fmt.Errorf("%s: %w", bus.ErrBitcoindUnreachable, err),
+		).Error("Failed to query status")
+
+		status.Status = bus.NodeDisconnected
+		return &status
+	}
+
+	var blockChainInfo customBlockChainInfo
+	if err := json.Unmarshal(result, &blockChainInfo); err != nil {
+		log.WithField(
+			"err", fmt.Errorf("unable to parse blockchain info: %w", err),
 		).Error("Failed to query status")
 
 		status.Status = bus.NodeDisconnected
@@ -114,9 +149,28 @@ func (s *Service) GetNetwork() (network *bus.Network) {
 		return network
 	}
 
-	var networkInfo *btcjson.GetNetworkInfoResult
-	if networkInfo, err = client.GetNetworkInfo(); err != nil {
+	// Custom network info struct to handle warnings as array
+	type customNetworkInfo struct {
+		RelayFee       float64  `json:"relayfee"`
+		IncrementalFee float64  `json:"incrementalfee"`
+		Version        int32    `json:"version"`
+		Subversion     string   `json:"subversion"`
+		Warnings       []string `json:"warnings"`
+	}
+
+	// Use raw request to avoid btcd struct incompatibility
+	result, err := client.RawRequest("getnetworkinfo", nil)
+	if err != nil {
 		log.WithField("err", fmt.Errorf("%s: %w", bus.ErrBitcoindUnreachable, err)).
+			Error("Failed to query status")
+
+		network = new(bus.Network)
+		return network
+	}
+
+	var networkInfo customNetworkInfo
+	if err := json.Unmarshal(result, &networkInfo); err != nil {
+		log.WithField("err", fmt.Errorf("unable to parse network info: %w", err)).
 			Error("Failed to query status")
 
 		network = new(bus.Network)
@@ -127,7 +181,7 @@ func (s *Service) GetNetwork() (network *bus.Network) {
 		RelayFee:       networkInfo.RelayFee,
 		IncrementalFee: networkInfo.IncrementalFee,
 		Version:        networkInfo.Version,
-		Subversion:     networkInfo.SubVersion,
+		Subversion:     networkInfo.Subversion,
 	}
 	return network
 }

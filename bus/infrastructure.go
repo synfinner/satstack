@@ -115,6 +115,7 @@ func New(host string, user string, pass string, proxy string, noTLS bool, unload
 	}
 
 	// Initialize RPC clients.
+	log.Info("Creating main RPC client...")
 	mainClient, err := rpcclient.New(connCfg, nil)
 	if err != nil {
 		return nil, err // error ctx not required
@@ -130,14 +131,43 @@ func New(host string, user string, pass string, proxy string, noTLS bool, unload
 		return nil, err // error ctx not required
 	}
 
-	info, err := mainClient.GetBlockChainInfo()
+	// Custom blockchain info struct to avoid btcd struct incompatibility
+	type customBlockChainInfo struct {
+		Chain            string   `json:"chain"`
+		Blocks           int32    `json:"blocks"`
+		Headers          int32    `json:"headers"`
+		BestBlockHash    string   `json:"bestblockhash"`
+		Pruned           bool     `json:"pruned"`
+		Warnings         []string `json:"warnings"`
+	}
+
+	log.Info("Calling custom GetBlockChainInfo...")
+	blockchainResult, err := mainClient.RawRequest("getblockchaininfo", nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ErrBitcoindUnreachable, err)
 	}
 
-	networkInfo, err := mainClient.GetNetworkInfo()
+	var info customBlockChainInfo
+	if err := json.Unmarshal(blockchainResult, &info); err != nil {
+		return nil, fmt.Errorf("unable to parse blockchain info: %w", err)
+	}
+
+	// Custom network info struct to handle warnings as array
+	type customNetworkInfo struct {
+		Version   int32    `json:"version"`
+		Warnings  []string `json:"warnings"`
+	}
+
+	// Use raw request to avoid btcd struct incompatibility
+	log.Info("Using custom GetNetworkInfo implementation to handle warnings array")
+	result, err := mainClient.RawRequest("getnetworkinfo", nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ErrBitcoindUnreachable, err)
+	}
+
+	var networkInfo customNetworkInfo
+	if err := json.Unmarshal(result, &networkInfo); err != nil {
+		return nil, fmt.Errorf("unable to detect bitcoind version: %w", err)
 	}
 
 	if v := networkInfo.Version; v < minSupportedBitcoindVersion {
